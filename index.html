@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>XOOPSS STORE</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
+        body { font-family: 'Inter', sans-serif; background-color: #000000; color: white; -webkit-tap-highlight-color: transparent; }
+        .glass { background: rgba(20, 20, 20, 0.8); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.08); }
+        .neon-accent { box-shadow: 0 0 15px rgba(16, 185, 129, 0.3); }
+        .ai-glow { box-shadow: 0 0 20px rgba(139, 92, 246, 0.4); border-color: rgba(139, 92, 246, 0.5); }
+        .typing-dot { animation: typing 1.4s infinite ease-in-out both; }
+        .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+        .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+        @keyframes typing { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }
+        input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // --- КОНФИГУРАЦИЯ ---
+        const RATE_CNY = 14.5; 
+        const COMMISSION = 1500; 
+        const SHIPPING_PER_KG = 800;
+        
+        // 🔑 ВСТАВЬТЕ СЮДА ВАШ API KEY OT GEMINI
+        // Получить ключ можно тут: https://aistudio.google.com/app/apikey
+        const apiKey = ""; 
+
+        // Иконки
+        const CalcIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" x2="16" y1="6" y2="6"/><line x1="16" x2="16" y1="14" y2="18"/><path d="M16 10h.01"/><path d="M12 10h.01"/><path d="M8 10h.01"/><path d="M12 14h.01"/><path d="M8 14h.01"/><path d="M12 18h.01"/><path d="M8 18h.01"/></svg>;
+        const StockIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>;
+        const SearchIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>;
+        const SparklesIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>;
+        const RobotIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/><path d="M8 14h.01"/><path d="M16 14h.01"/><path d="M12 18h.01"/></svg>;
+
+        const App = () => {
+            const [tab, setTab] = useState('calc');
+            const [price, setPrice] = useState('');
+            const [cat, setCat] = useState('cross');
+            const [res, setRes] = useState(0);
+            
+            // AI States
+            const [aiQuery, setAiQuery] = useState('');
+            const [aiLoading, setAiLoading] = useState(false);
+            const [aiResults, setAiResults] = useState(null);
+            
+            // Size Guide States
+            const [sizeCm, setSizeCm] = useState('');
+            const [sizeBrand, setSizeBrand] = useState('');
+            const [sizeResult, setSizeResult] = useState('');
+            const [sizeLoading, setSizeLoading] = useState(false);
+            const [showSizeModal, setShowSizeModal] = useState(false);
+
+            // Авто-расчет
+            useEffect(() => {
+                const val = parseFloat(price);
+                if (!val) { setRes(0); return; }
+                let w = cat === 'cross' ? 1.5 : (cat === 'tech' ? 0.5 : 0.8);
+                setRes(Math.floor((val * RATE_CNY) + (w * SHIPPING_PER_KG) + COMMISSION));
+            }, [price, cat]);
+
+            const tg = window.Telegram.WebApp;
+            useEffect(() => { tg.ready(); tg.expand(); }, []);
+
+            // --- AI Logic ---
+            const callGemini = async (prompt) => {
+                if (!apiKey) return "Error: API Key not set";
+                try {
+                    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+                    });
+                    const data = await response.json();
+                    return data.candidates[0].content.parts[0].text;
+                } catch (error) {
+                    console.error("AI Error:", error);
+                    return null;
+                }
+            };
+
+            const handleAiSearch = async () => {
+                if (!aiQuery.trim()) return;
+                setAiLoading(true);
+                setAiResults(null);
+                
+                const prompt = `Ты эксперт по покупкам в Китае (Poizon, 1688). 
+                Пользователь ищет: "${aiQuery}".
+                Предложи 3 конкретные модели товара, которые подходят под описание.
+                Для каждой модели укажи примерную цену в Юанях (CNY) числом.
+                Верни ответ ТОЛЬКО в формате JSON:
+                [{"name": "Название модели", "price": 500, "desc": "Короткое объяснение почему это круто"}]`;
+
+                const result = await callGemini(prompt);
+                
+                if (result) {
+                    try {
+                        const cleanJson = result.replace(/```json|```/g, '').trim();
+                        setAiResults(JSON.parse(cleanJson));
+                    } catch (e) {
+                        setAiResults([]); // Fallback
+                    }
+                }
+                setAiLoading(false);
+            };
+
+            const handleSizeGuide = async () => {
+                if (!sizeCm || !sizeBrand) return;
+                setSizeLoading(true);
+                const prompt = `У пользователя длина стопы ${sizeCm} см. Он хочет купить обувь бренда ${sizeBrand}.
+                Какой размер (EU) ему подойдет? Дай краткий совет (например: "Бери 43 EU, они маломерят"). 
+                Ответь на русском, очень кратко (1 предложение).`;
+                
+                const result = await callGemini(prompt);
+                setSizeResult(result || "Не удалось определить размер.");
+                setSizeLoading(false);
+            };
+
+            return (
+                <div className="min-h-screen pb-20 p-4 bg-black text-white selection:bg-emerald-500 selection:text-black">
+                    
+                    {/* Header */}
+                    <div className="flex justify-between items-center mb-6">
+                        <h1 className="text-xl font-extrabold tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-cyan-400">XOOPSS STORE</h1>
+                        <div className="flex items-center gap-1 text-xs font-bold bg-zinc-800 px-2 py-1 rounded text-gray-400">
+                           <span className="text-emerald-500">●</span> Online
+                        </div>
+                    </div>
+
+                    {/* --- TAB: CALCULATOR --- */}
+                    {tab === 'calc' && (
+                        <div className="animate-fade-in">
+                            {/* AI Size Guide Button */}
+                            <button 
+                                onClick={() => setShowSizeModal(!showSizeModal)}
+                                className="w-full mb-6 bg-gradient-to-r from-violet-900/50 to-fuchsia-900/50 border border-violet-500/30 rounded-xl p-3 flex items-center justify-center gap-2 hover:border-violet-400 transition-all"
+                            >
+                                <SparklesIcon />
+                                <span className="text-sm font-bold text-violet-200">AI Подобрать размер</span>
+                            </button>
+
+                            {showSizeModal && (
+                                <div className="mb-6 bg-zinc-900 p-4 rounded-xl border border-zinc-700 animate-in fade-in slide-in-from-top-4">
+                                    <h3 className="text-sm font-bold text-gray-300 mb-3">Гид по размерам 🦶</h3>
+                                    <div className="flex gap-2 mb-3">
+                                        <input 
+                                            type="number" 
+                                            placeholder="CM (27.5)" 
+                                            value={sizeCm}
+                                            onChange={e => setSizeCm(e.target.value)}
+                                            className="w-1/3 bg-black border border-zinc-700 rounded-lg p-2 text-center outline-none focus:border-violet-500 text-white"
+                                        />
+                                        <input 
+                                            type="text" 
+                                            placeholder="Бренд (Nike)" 
+                                            value={sizeBrand}
+                                            onChange={e => setSizeBrand(e.target.value)}
+                                            className="w-2/3 bg-black border border-zinc-700 rounded-lg p-2 outline-none focus:border-violet-500 text-white"
+                                        />
+                                    </div>
+                                    <button 
+                                        onClick={handleSizeGuide}
+                                        disabled={sizeLoading}
+                                        className="w-full bg-violet-600 text-white font-bold py-2 rounded-lg text-sm mb-2"
+                                    >
+                                        {sizeLoading ? 'Думаю...' : 'Узнать размер'}
+                                    </button>
+                                    {sizeResult && (
+                                        <div className="bg-violet-900/20 p-2 rounded text-xs text-violet-200 mt-2 border-l-2 border-violet-500 pl-3">
+                                            {sizeResult}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            <div className="mb-6 space-y-2">
+                                <div className="text-xs text-gray-500 uppercase font-bold tracking-widest">Категория</div>
+                                <div className="grid grid-cols-3 gap-2">
+                                    {['cross', 'clothes', 'tech'].map(c => (
+                                        <button key={c} onClick={() => setCat(c)} className={`py-3 rounded-xl text-sm font-bold transition-all ${cat === c ? 'bg-emerald-500 text-black neon-accent' : 'bg-zinc-900 text-gray-400'}`}>
+                                            {c === 'cross' ? '👟 Обувь' : (c === 'clothes' ? '👕 Одежда' : '📱 Техника')}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="mb-6 glass p-4 rounded-2xl relative overflow-hidden">
+                                <div className="text-xs text-gray-500 uppercase font-bold tracking-widest mb-2">Цена товара (Юани ¥)</div>
+                                <div className="flex items-center">
+                                    <span className="text-2xl font-bold text-emerald-500 mr-2">¥</span>
+                                    <input type="number" value={price} onChange={e => setPrice(e.target.value)} placeholder="0" className="w-full bg-transparent text-4xl font-black outline-none placeholder-zinc-800 text-white" />
+                                </div>
+                            </div>
+
+                            {res > 0 && (
+                                <div className="bg-zinc-900 border border-zinc-800 p-5 rounded-2xl shadow-2xl animate-in zoom-in-95 duration-300">
+                                    <div className="flex justify-between items-end mb-4">
+                                        <span className="text-gray-400 font-medium">Итого под ключ:</span>
+                                        <span className="text-3xl font-black text-white">{res.toLocaleString()} ₽</span>
+                                    </div>
+                                    <div className="bg-emerald-900/20 border border-emerald-500/20 p-3 rounded-xl mb-4">
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+                                            <span className="text-emerald-400 text-xs font-bold uppercase">Оплата 50/50</span>
+                                        </div>
+                                        <div className="flex justify-between text-sm mb-1">
+                                            <span className="text-gray-400">Сейчас:</span>
+                                            <span className="font-bold">{(res/2).toLocaleString()} ₽</span>
+                                        </div>
+                                        <div className="flex justify-between text-sm">
+                                            <span className="text-gray-400">При получении фото:</span>
+                                            <span className="font-bold">{(res/2).toLocaleString()} ₽</span>
+                                        </div>
+                                    </div>
+                                    <button onClick={() => tg.sendData(JSON.stringify({price: res, item: price}))} className="w-full py-4 bg-white text-black font-black rounded-xl hover:bg-gray-200 active:scale-95 transition-all">
+                                        ОФОРМИТЬ ЗАКАЗ
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* --- TAB: STOCK (Placeholder) --- */}
+                    {tab === 'stock' && (
+                        <div>
+                             <div className="p-10 text-center text-gray-500">
+                                <div className="text-4xl mb-2">📦</div>
+                                <div className="font-bold">Витрина загружается...</div>
+                                <div className="text-xs mt-2">Скоро здесь появятся товары в наличии</div>
+                             </div>
+                        </div>
+                    )}
+
+                    {/* --- TAB: AI FINDER --- */}
+                    {tab === 'search' && (
+                        <div className="space-y-4 animate-fade-in">
+                             <div className="bg-gradient-to-br from-violet-900/20 to-black p-5 rounded-2xl border border-violet-500/20 ai-glow">
+                                <div className="flex items-center gap-2 mb-3">
+                                    <RobotIcon />
+                                    <h2 className="font-bold text-violet-300">AI Стилист</h2>
+                                </div>
+                                <p className="text-xs text-gray-400 mb-4">Не знаешь, что выбрать? Опиши стиль и бюджет, AI найдет лучшие варианты на Poizon.</p>
+                                
+                                <textarea 
+                                    value={aiQuery}
+                                    onChange={(e) => setAiQuery(e.target.value)}
+                                    className="w-full bg-black/50 border border-violet-500/30 rounded-xl p-3 text-white h-24 resize-none outline-none focus:border-violet-500 transition-colors text-sm" 
+                                    placeholder="Например: Кроссовки на лето, черные, бюджет 500 юаней, стиль дрилл..."
+                                ></textarea>
+                                
+                                <button 
+                                    onClick={handleAiSearch}
+                                    disabled={aiLoading}
+                                    className="w-full mt-3 py-3 bg-violet-600 text-white font-bold rounded-xl flex justify-center items-center gap-2 hover:bg-violet-500 transition-all"
+                                >
+                                    {aiLoading ? (
+                                        <div className="flex gap-1">
+                                            <div className="w-2 h-2 bg-white rounded-full typing-dot"></div>
+                                            <div className="w-2 h-2 bg-white rounded-full typing-dot"></div>
+                                            <div className="w-2 h-2 bg-white rounded-full typing-dot"></div>
+                                        </div>
+                                    ) : (
+                                        <>✨ Найти варианты</>
+                                    )}
+                                </button>
+                             </div>
+
+                             {/* AI Results */}
+                             {aiResults && (
+                                <div className="space-y-3">
+                                    {aiResults.map((item, idx) => (
+                                        <div key={idx} className="glass p-4 rounded-xl flex flex-col gap-2 border-l-4 border-violet-500">
+                                            <div className="flex justify-between items-start">
+                                                <h3 className="font-bold text-sm">{item.name}</h3>
+                                                <span className="text-emerald-400 font-bold text-sm">¥{item.price}</span>
+                                            </div>
+                                            <p className="text-xs text-gray-400 leading-relaxed">{item.desc}</p>
+                                            <button 
+                                                onClick={() => { setPrice(item.price); setTab('calc'); }}
+                                                className="mt-2 text-xs bg-zinc-800 py-2 rounded-lg hover:bg-zinc-700 transition-colors font-medium"
+                                            >
+                                                Рассчитать доставку →
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                             )}
+                        </div>
+                    )}
+
+                    {/* MENU */}
+                    <div className="fixed bottom-6 left-4 right-4 h-16 glass rounded-2xl flex justify-around items-center px-2 z-50 bg-black/80 backdrop-blur-xl">
+                        <button onClick={() => setTab('stock')} className={`flex flex-col items-center p-2 w-16 transition-all ${tab === 'stock' ? 'text-emerald-400 scale-110' : 'text-zinc-500'}`}>
+                            <StockIcon />
+                            <span className="text-[9px] font-bold mt-1">STOCK</span>
+                        </button>
+                        <button onClick={() => setTab('calc')} className={`flex flex-col items-center p-2 w-16 transition-all ${tab === 'calc' ? 'text-emerald-400 scale-110' : 'text-zinc-500'}`}>
+                            <CalcIcon />
+                            <span className="text-[9px] font-bold mt-1">CALC</span>
+                        </button>
+                        <button onClick={() => setTab('search')} className={`flex flex-col items-center p-2 w-16 transition-all ${tab === 'search' ? 'text-violet-400 scale-110' : 'text-zinc-500'}`}>
+                            <SparklesIcon />
+                            <span className="text-[9px] font-bold mt-1">AI FIND</span>
+                        </button>
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
